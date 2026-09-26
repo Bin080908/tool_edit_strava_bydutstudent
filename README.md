@@ -12,3 +12,4 @@ Open the local web address in your browser.
 Upload your .gpx file following the on-screen instructions.
 
 Note: The user interface (UI) language is currently in Vietnamese.
+dowload all files first and add all it into one folder and run run.bat
