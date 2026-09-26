@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strava FIT Activity Generator</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #map {
+      height: 100%;
+      min-height: 480px;
+      border-radius: 0.75rem;
+      z-index: 10;
+    }
+    .strava-orange {
+      color: #fc5200;
+    }
+    .bg-strava {
+      background-color: #fc5200;
+    }
+    .bg-strava:hover {
+      background-color: #e34a00;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #161b22;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-[#161b22] px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 shadow-md">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-900/50">
+        <i data-lucide="activity" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          Strava FIT Studio <span class="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">Local v1.0</span>
+        </h1>
+        <p class="text-xs text-gray-400">
+          Tác giả: <span class="text-orange-400 font-semibold">Bành Hoàng Việt 26ES</span> • Chuẩn Garmin/Strava
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-2.5">
+      <a href="https://www.strava.com/upload/select" target="_blank" rel="noopener noreferrer" 
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white transition shadow-sm">
+        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+        <span>Tải lên Strava</span>
+        <i data-lucide="external-link" class="w-3.5 h-3.5 opacity-80"></i>
+      </a>
+      <a href="https://gpx.studio/app" target="_blank" rel="noopener noreferrer" 
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-orange-400 hover:text-orange-300 border border-gray-700 transition shadow-sm">
+        <i data-lucide="map" class="w-4 h-4"></i>
+        <span>Vẽ GPX trên gpx.studio</span>
+        <i data-lucide="external-link" class="w-3.5 h-3.5 text-gray-400"></i>
+      </a>
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sẵn sàng
+      </span>
+    </div>
+  </header>
+
+  <!-- File Protocol Warning Banner -->
+  <div id="fileProtocolBanner" class="hidden bg-amber-500/15 border-b border-amber-500/30 px-6 py-2.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2">
+      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0"></i>
+      <span>Bạn đang mở trực tiếp file qua <code>file:///</code>. Vui lòng mở qua địa chỉ máy chủ: <a href="http://127.0.0.1:5000" class="underline font-bold text-white hover:text-orange-400">http://127.0.0.1:5000</a> (hoặc nhấp đúp file <strong>run_app.bat</strong>) để các tính năng hoạt động đầy đủ.</span>
+    </div>
+    <a href="http://127.0.0.1:5000" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded text-xs transition">
+      Chuyển sang http://127.0.0.1:5000 ↗
+    </a>
+  </div>
+
+  <!-- Main Content Grid -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-w-[1700px] mx-auto w-full">
+    
+    <!-- Left Column: Controls (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col space-y-5 overflow-y-auto pr-1">
+      
+      <!-- Card 1: Chọn hoặc Tải File GPX -->
+      <div class="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <label class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+            <i data-lucide="map-pin" class="w-4 h-4 text-orange-400"></i> File Lộ trình (GPX)
+          </label>
+          <button id="refreshFilesBtn" class="text-xs text-gray-400 hover:text-white flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Tải lại
+          </button>
+        </div>
+
+        <!-- File Select from Folder -->
+        <div class="space-y-3">
+          <select id="fileSelect" class="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-orange-500">
+            <option value="">-- Chọn file GPX trong thư mục --</option>
+          </select>
+
+          <!-- Upload Dropzone -->
+          <div id="dropzone" class="border-2 border-dashed border-gray-700 hover:border-orange-500/60 rounded-xl p-4 text-center cursor-pointer transition bg-[#0d1117]/50">
+            <input type="file" id="fileInput" accept=".gpx" class="hidden">
+            <i data-lucide="upload-cloud" class="w-8 h-8 text-gray-400 mx-auto mb-1"></i>
+            <p class="text-xs text-gray-300 font-medium">Kéo thả file .gpx vào đây hoặc <span class="text-orange-400 underline">chọn từ máy</span></p>
+            <p class="text-[11px] text-gray-500 mt-1">Hỗ trợ mọi file GPX vẽ từ Google Maps, Footpath, Komoot, Strava Route</p>
+          </div>
+
+          <!-- Quick link to gpx.studio -->
+          <div class="text-center pt-0.5">
+            <a href="https://gpx.studio/app" target="_blank" rel="noopener noreferrer" 
+               class="inline-flex items-center gap-1.5 text-xs text-orange-400 hover:text-orange-300 hover:underline">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              <span>Chưa có lộ trình? Vẽ file GPX nhanh tại <strong>gpx.studio/app</strong> ↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Loaded GPX Badge Info -->
+        <div id="gpxInfoBanner" class="hidden mt-4 pt-3 border-t border-gray-800/80 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-400"></span>
+            <span id="gpxNameDisplay" class="font-medium text-gray-300 truncate max-w-[200px]">New file 1.gpx</span>
+          </div>
+          <div class="flex gap-3 text-gray-400">
+            <span>Cự ly: <strong id="gpxDistDisplay" class="text-orange-400 font-bold">0.0 km</strong></span>
+            <span>Toạ độ: <strong id="gpxPtsDisplay" class="text-gray-200">0 điểm</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Lịch trình & Thời gian -->
+      <div class="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+        <label class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+          <i data-lucide="clock" class="w-4 h-4 text-orange-400"></i> Thời gian Bắt đầu & Hoạt động
+        </label>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Loại môn thể thao</label>
+            <select id="activityType" class="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-orange-500">
+              <option value="Run">🏃 Chạy bộ (Run)</option>
+              <option value="Walk">🚶 Đi bộ (Walk)</option>
+              <option value="Ride">🚴 Đạp xe (Ride)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Múi giờ</label>
+            <input type="text" value="UTC+7 (Việt Nam)" readonly class="w-full bg-[#0d1117]/60 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Giờ bắt đầu xuất phát (Giờ địa phương)</label>
+          <input type="datetime-local" id="startTimeInput" class="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-orange-500">
+        </div>
+
+        <!-- Quick Time Presets -->
+        <div class="flex flex-wrap gap-1.5 pt-1">
+          <button type="button" onclick="setTimePreset('morning')" class="text-xs px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">🌅 Sáng (06:00)</button>
+          <button type="button" onclick="setTimePreset('afternoon')" class="text-xs px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">☀️ Chiều (15:22)</button>
+          <button type="button" onclick="setTimePreset('evening')" class="text-xs px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">🌙 Tối (19:30)</button>
+          <button type="button" onclick="setTimePreset('now')" class="text-xs px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">⏱️ Bây giờ</button>
+        </div>
+      </div>
+
+      <!-- Card 3: Tốc độ & Pace (Tự động tính giờ kết thúc) -->
+      <div class="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <label class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+            <i data-lucide="gauge" class="w-4 h-4 text-orange-400"></i> Vận tốc & Nhịp Pace
+          </label>
+          <span id="paceDisplayBadge" class="text-sm font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+            8:20 /km
+          </span>
+        </div>
+
+        <!-- Speed Presets -->
+        <div class="grid grid-cols-4 gap-2 text-xs">
+          <button type="button" onclick="setPace(12.0)" class="py-1.5 px-2 text-center rounded bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700/50">
+            🚶 Đi dạo<br><span class="text-[11px] text-gray-400">12:00</span>
+          </button>
+          <button type="button" onclick="setPace(8.33)" class="py-1.5 px-2 text-center rounded bg-orange-600/30 border border-orange-500/50 text-orange-300 font-semibold">
+            🚶 Đi nhanh<br><span class="text-[11px]">8:20</span>
+          </button>
+          <button type="button" onclick="setPace(6.66)" class="py-1.5 px-2 text-center rounded bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700/50">
+            🏃 Chạy chậm<br><span class="text-[11px] text-gray-400">6:40</span>
+          </button>
+          <button type="button" onclick="setPace(5.5)" class="py-1.5 px-2 text-center rounded bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700/50">
+            ⚡ Chạy đều<br><span class="text-[11px] text-gray-400">5:30</span>
+          </button>
+        </div>
+
+        <!-- Slider -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs text-gray-400">
+            <span>Nhanh (Pace 4:00)</span>
+            <span id="speedKmhText">7.20 km/h</span>
+            <span>Chậm (Pace 14:00)</span>
+          </div>
+          <input type="range" id="paceSlider" min="4.0" max="14.0" step="0.05" value="8.33" class="w-full accent-orange-500 cursor-pointer">
+        </div>
+
+        <!-- Live Destination Calculator Card -->
+        <div class="bg-[#0d1117] border border-gray-800 rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <span class="text-gray-400 block">Thời lượng dự tính</span>
+            <strong id="calcDuration" class="text-base text-gray-100 font-mono">52:48</strong>
+          </div>
+          <div>
+            <span class="text-gray-400 block">Giờ về đích dự tính</span>
+            <strong id="calcEndTime" class="text-base text-emerald-400 font-mono">--:--:--</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Nhịp tim & Độ chân thực -->
+      <div class="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+        <label class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+          <i data-lucide="heart" class="w-4 h-4 text-rose-500"></i> Nhịp Sinh Trắc Học Tự Nhiên
+        </label>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+              <span>Nhịp tim mục tiêu</span>
+              <strong id="hrText" class="text-rose-400">120 bpm</strong>
+            </div>
+            <input type="range" id="hrSlider" min="90" max="180" value="120" class="w-full accent-rose-500 cursor-pointer">
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+              <span>Nhịp bước (Cadence)</span>
+              <strong id="cadText" class="text-cyan-400">137 spm</strong>
+            </div>
+            <input type="range" id="cadSlider" min="110" max="180" value="137" class="w-full accent-cyan-500 cursor-pointer">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs text-gray-400 mb-1">
+            <span>Mức biến thiên tự nhiên (Tránh bị robot hoá)</span>
+            <span id="varText" class="text-gray-300">Tự nhiên (0.8)</span>
+          </div>
+          <input type="range" id="varianceSlider" min="0.1" max="1.5" step="0.1" value="0.8" class="w-full accent-orange-500 cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-2">
+        <button id="generateBtn" class="w-full py-3.5 px-6 rounded-xl font-bold text-white bg-strava shadow-lg shadow-orange-900/40 flex items-center justify-center gap-2 transition hover:scale-[1.01] active:scale-[0.99] text-base">
+          <i data-lucide="zap" class="w-5 h-5"></i> Xuất File FIT Chuẩn Strava
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Interactive Map & Results (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col space-y-5">
+      
+      <!-- Map Container -->
+      <div class="bg-[#161b22] border border-gray-800 rounded-xl p-4 shadow-sm flex flex-col flex-1 min-h-[500px]">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <h2 class="text-sm font-semibold text-gray-200 flex items-center gap-2">
+            <i data-lucide="compass" class="w-4 h-4 text-orange-400"></i> Bản đồ Lộ trình Trackpoints
+          </h2>
+          <span id="mapStatusText" class="text-xs text-gray-400">Đang chờ tải file...</span>
+        </div>
+        <div id="map" class="w-full flex-1 rounded-lg"></div>
+      </div>
+
+      <!-- Result Card (Hidden until generated) -->
+      <div id="resultCard" class="hidden bg-[#161b22] border border-emerald-500/40 rounded-xl p-5 shadow-lg bg-gradient-to-r from-[#161b22] to-emerald-950/20">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
+              <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white">Xuất File FIT Thành Công!</h3>
+              <p id="resFilename" class="text-xs text-gray-400 font-mono mt-0.5">activity_walk_run_modified.fit</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <a id="downloadBtn" href="#" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold flex items-center gap-2 transition shadow">
+              <i data-lucide="download" class="w-4 h-4"></i> Tải Về Máy
+            </a>
+            <a href="https://www.strava.com/upload/select" target="_blank" rel="noopener noreferrer" 
+               class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-semibold flex items-center gap-2 transition shadow">
+              <i data-lucide="upload-cloud" class="w-4 h-4"></i> Tải Lên Strava Web ↗
+            </a>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-3 border-t border-gray-800/80 text-xs">
+          <div>
+            <span class="text-gray-400">Quãng đường:</span>
+            <p id="resDist" class="text-sm font-bold text-white mt-0.5">6.34 km</p>
+          </div>
+          <div>
+            <span class="text-gray-400">Thời gian chạy:</span>
+            <p id="resDuration" class="text-sm font-bold text-white mt-0.5">00:52:48</p>
+          </div>
+          <div>
+            <span class="text-gray-400">Tốc độ / Pace:</span>
+            <p id="resSpeed" class="text-sm font-bold text-white mt-0.5">7.21 km/h (8:20)</p>
+          </div>
+          <div>
+            <span class="text-gray-400">Giờ về đích:</span>
+            <p id="resEndTime" class="text-sm font-bold text-emerald-400 mt-0.5">16:14:48</p>
+          </div>
+        </div>
+
+        <div class="mt-4 p-3 bg-gray-900/60 border border-gray-800 rounded-lg text-xs text-gray-300 flex flex-wrap items-center justify-between gap-2">
+          <span>💡 Để nạp vào tài khoản Strava: Bấm nút <strong>"Tải Lên Strava Web ↗"</strong> hoặc truy cập <a href="https://www.strava.com/upload/select" target="_blank" class="text-orange-400 font-bold underline">strava.com/upload/select</a> và chọn file vừa tải.</span>
+          <a href="https://www.strava.com/upload/select" target="_blank" class="text-orange-400 hover:text-orange-300 font-semibold flex items-center gap-1">
+            Đi tới trang upload <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </a>
+        </div>
+      </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 bg-[#161b22] px-6 py-4 mt-auto text-xs text-gray-400 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <span>Tác giả & Bản quyền:</span>
+      <span class="text-white font-semibold px-2.5 py-1 rounded bg-gray-800 border border-gray-700 text-orange-400">
+        Bành Hoàng Việt 26ES
+      </span>
+    </div>
+    <div class="flex flex-wrap items-center gap-4">
+      <a href="https://www.strava.com/upload/select" target="_blank" rel="noopener noreferrer" class="text-orange-400 hover:text-orange-300 transition flex items-center gap-1.5 font-semibold">
+        <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
+        <span>Upload file FIT: <strong>strava.com/upload/select</strong></span>
+        <i data-lucide="external-link" class="w-3 h-3 text-gray-400"></i>
+      </a>
+      <span class="text-gray-600 hidden sm:inline">•</span>
+      <a href="https://gpx.studio/app" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-orange-400 transition flex items-center gap-1.5 font-medium">
+        <i data-lucide="map" class="w-3.5 h-3.5 text-orange-400"></i>
+        <span>Vẽ lộ trình GPX: <strong>gpx.studio/app</strong></span>
+        <i data-lucide="external-link" class="w-3 h-3 text-gray-400"></i>
+      </a>
+      <span class="text-gray-600 hidden sm:inline">•</span>
+      <span class="text-gray-500">Strava FIT Studio © 2026</span>
+    </div>
+  </footer>
+
+  <script>
+    // Initialize Icons
+    lucide.createIcons();
+
+    // Check protocol and set API_BASE
+    const API_BASE = (window.location.protocol === 'file:' || !window.location.host.includes(':5000')) ? 'http://127.0.0.1:5000' : '';
+
+    if (window.location.protocol === 'file:') {
+      const banner = document.getElementById('fileProtocolBanner');
+      if (banner) banner.classList.remove('hidden');
+    }
+
+    function showConnectionError(action) {
+      alert(`⚠️ Không thể kết nối tới máy chủ Strava Studio (${API_BASE || 'http://127.0.0.1:5000'}) khi ${action}!\n\nNguyên nhân & Cách khắc phục:\n1. Máy chủ Python chưa được khởi động.\n2. Hãy mở thư mục: Documents\\strava\n3. Nhấp đúp chuột vào file: run_app.bat\n4. Trình duyệt sẽ tự động kết nối và tải dữ liệu bình thường.`);
+    }
+
+    // Map Setup
+    let map = L.map('map').setView([15.991166, 108.231754], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let routeLayer = null;
+    let startMarker = null;
+    let endMarker = null;
+
+    let currentGpxData = null;
+    let currentGpxPath = '';
+
+    // Set Default Start Time to Today at 15:22:00
+    function initStartTime() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      document.getElementById('startTimeInput').value = `${year}-${month}-${day}T15:22`;
+      updateCalculatedFinish();
+    }
+    initStartTime();
+
+    function setTimePreset(type) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      let timeStr = "15:22";
+      if (type === 'morning') timeStr = "06:00";
+      else if (type === 'afternoon') timeStr = "15:22";
+      else if (type === 'evening') timeStr = "19:30";
+      else if (type === 'now') {
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        timeStr = `${hh}:${mm}`;
+      }
+      document.getElementById('startTimeInput').value = `${year}-${month}-${day}T${timeStr}`;
+      updateCalculatedFinish();
+    }
+
+    // Pace conversion helpers
+    function paceToSpeed(paceMin) {
+      return (60.0 / paceMin);
+    }
+
+    function formatPace(paceMin) {
+      const min = Math.floor(paceMin);
+      const sec = Math.round((paceMin - min) * 60);
+      return `${min}:${sec < 10 ? '0' : ''}${sec} /km`;
+    }
+
+    function setPace(val) {
+      document.getElementById('paceSlider').value = val;
+      onPaceChange();
+    }
+
+    function onPaceChange() {
+      const paceVal = parseFloat(document.getElementById('paceSlider').value);
+      document.getElementById('paceDisplayBadge').innerText = formatPace(paceVal);
+      const spdKmh = paceToSpeed(paceVal);
+      document.getElementById('speedKmhText').innerText = `${spdKmh.toFixed(2)} km/h`;
+      updateCalculatedFinish();
+    }
+    document.getElementById('paceSlider').addEventListener('input', onPaceChange);
+
+    document.getElementById('hrSlider').addEventListener('input', (e) => {
+      document.getElementById('hrText').innerText = `${e.target.value} bpm`;
+    });
+    document.getElementById('cadSlider').addEventListener('input', (e) => {
+      document.getElementById('cadText').innerText = `${e.target.value} spm`;
+    });
+    document.getElementById('varianceSlider').addEventListener('input', (e) => {
+      document.getElementById('varText').innerText = `Tự nhiên (${e.target.value})`;
+    });
+
+    document.getElementById('startTimeInput').addEventListener('change', updateCalculatedFinish);
+
+    function updateCalculatedFinish() {
+      if (!currentGpxData || !currentGpxData.total_distance_m) {
+        document.getElementById('calcEndTime').innerText = '--:--:--';
+        return;
+      }
+      const distMeters = currentGpxData.total_distance_m;
+      const paceVal = parseFloat(document.getElementById('paceSlider').value);
+      const targetSpeedMps = 1000.0 / (paceVal * 60.0);
+      const totalSecs = Math.round(distMeters / targetSpeedMps);
+
+      const hours = Math.floor(totalSecs / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = totalSecs % 60;
+      document.getElementById('calcDuration').innerText = 
+        `${hours > 0 ? hours + 'h ' : ''}${mins}m ${secs}s`;
+
+      const startInputVal = document.getElementById('startTimeInput').value;
+      if (startInputVal) {
+        const startDt = new Date(startInputVal);
+        const endDt = new Date(startDt.getTime() + totalSecs * 1000);
+        const hh = String(endDt.getHours()).padStart(2, '0');
+        const mm = String(endDt.getMinutes()).padStart(2, '0');
+        const ss = String(endDt.getSeconds()).padStart(2, '0');
+        document.getElementById('calcEndTime').innerText = `${hh}:${mm}:${ss}`;
+      }
+    }
+
+    // Load available GPX files from server
+    async function loadFileList() {
+      try {
+        const res = await fetch(`${API_BASE}/api/list_files`);
+        const data = await res.json();
+        const select = document.getElementById('fileSelect');
+        select.innerHTML = '<option value="">-- Chọn file GPX trong thư mục --</option>';
+        if (data.files && data.files.length > 0) {
+          data.files.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.path;
+            opt.innerText = f.name;
+            select.appendChild(opt);
+          });
+          const defaultFile = data.files.find(f => f.name.includes('New file 1.gpx')) || data.files[0];
+          if (defaultFile) {
+            select.value = defaultFile.path;
+            selectFile(defaultFile.path);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading files", err);
+      }
+    }
+    loadFileList();
+    document.getElementById('refreshFilesBtn').addEventListener('click', loadFileList);
+
+    document.getElementById('fileSelect').addEventListener('change', (e) => {
+      if (e.target.value) {
+        selectFile(e.target.value);
+      }
+    });
+
+    async function selectFile(filepath) {
+      document.getElementById('mapStatusText').innerText = "Đang tải dữ liệu lộ trình...";
+      try {
+        const res = await fetch(`${API_BASE}/api/parse_gpx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filepath })
+        });
+        const data = await res.json();
+        if (data.success) {
+          displayGpxOnMap(data);
+        } else {
+          alert('Lỗi: ' + data.error);
+        }
+      } catch (err) {
+        showConnectionError("đọc file lộ trình");
+      }
+    }
+
+    // File Drag and Drop / Upload
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('border-orange-500');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-orange-500'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-orange-500');
+      if (e.dataTransfer.files.length > 0) {
+        handleUpload(e.dataTransfer.files[0]);
+      }
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleUpload(e.target.files[0]);
+      }
+    });
+
+    async function handleUpload(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      document.getElementById('mapStatusText').innerText = "Đang tải file lên...";
+
+      try {
+        const res = await fetch(`${API_BASE}/api/upload_gpx`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          loadFileList();
+          displayGpxOnMap(data);
+        } else {
+          alert("Lỗi tải file: " + data.error);
+        }
+      } catch (err) {
+        showConnectionError("tải file lên");
+      }
+    }
+
+    function displayGpxOnMap(data) {
+      currentGpxData = data;
+      currentGpxPath = data.filepath;
+
+      document.getElementById('gpxInfoBanner').classList.remove('hidden');
+      document.getElementById('gpxNameDisplay').innerText = data.filename || data.filepath.split('\\').pop().split('/').pop();
+      document.getElementById('gpxDistDisplay').innerText = `${data.total_distance_km} km`;
+      document.getElementById('gpxPtsDisplay').innerText = `${data.num_points} điểm`;
+
+      if (routeLayer) map.removeLayer(routeLayer);
+      if (startMarker) map.removeLayer(startMarker);
+      if (endMarker) map.removeLayer(endMarker);
+
+      const latlngs = data.display_points.map(p => [p[0], p[1]]);
+      routeLayer = L.polyline(latlngs, {
+        color: '#fc5200',
+        weight: 5,
+        opacity: 0.9,
+        lineJoin: 'round'
+      }).addTo(map);
+
+      startMarker = L.circleMarker(latlngs[0], {
+        radius: 8,
+        fillColor: '#10b981',
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      }).addTo(map).bindPopup("🚩 Điểm xuất phát");
+
+      endMarker = L.circleMarker(latlngs[latlngs.length - 1], {
+        radius: 8,
+        fillColor: '#ef4444',
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      }).addTo(map).bindPopup("🏁 Điểm về đích");
+
+      map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
+      document.getElementById('mapStatusText').innerText = `Đã nạp ${data.num_points} trackpoints (${data.total_distance_km} km)`;
+
+      updateCalculatedFinish();
+    }
+
+    // Generate FIT Action
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      if (!currentGpxPath) {
+        alert("Vui lòng chọn hoặc tải lên một file GPX trước!");
+        return;
+      }
+
+      const btn = document.getElementById('generateBtn');
+      const oldHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Đang tính toán & đóng gói file FIT...`;
+      lucide.createIcons();
+
+      const payload = {
+        filepath: currentGpxPath,
+        activity_type: document.getElementById('activityType').value,
+        start_time: document.getElementById('startTimeInput').value,
+        avg_pace_min: parseFloat(document.getElementById('paceSlider').value),
+        cadence: parseInt(document.getElementById('cadSlider').value),
+        heart_rate: parseInt(document.getElementById('hrSlider').value),
+        natural_variance: parseFloat(document.getElementById('varianceSlider').value),
+        utc_offset: 7.0
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/api/generate_fit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          const card = document.getElementById('resultCard');
+          card.classList.remove('hidden');
+          document.getElementById('resFilename').innerText = `${result.filename} (${result.file_size_kb} KB - ${result.total_records} records)`;
+          document.getElementById('resDist').innerText = `${result.total_distance_km} km (+${result.total_ascent_m}m)`;
+          document.getElementById('resDuration').innerText = result.duration_formatted;
+          document.getElementById('resSpeed').innerText = `${result.avg_speed_kmh} km/h (${result.avg_pace})`;
+          document.getElementById('resEndTime').innerText = result.end_time_local;
+          document.getElementById('downloadBtn').href = `${API_BASE}${result.download_url}`;
+
+          card.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          alert("Lỗi: " + result.error);
+        }
+      } catch (err) {
+        showConnectionError("xuất file FIT");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+        lucide.createIcons();
+      }
+    });
+
+  </script>
+</body>
+</html>
