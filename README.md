@@ -1,4 +1,4 @@
-# tool_edit_strava_bydutstudent
+# tool_edit_strava_byDUTstudent
 User Guide
 
 Launch the Application:
